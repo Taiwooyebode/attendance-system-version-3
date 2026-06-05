@@ -1011,7 +1011,7 @@ def student_history():
 
 with app.app_context():
     db.create_all()
-    if not Admin.query.filter_by(username='admin').first():
+    if not Admin.query.filter_by(username='Beluga').first():
         db.session.add(Admin(username=os.environ.get("ADMIN_USERNAME"), password=generate_password_hash(os.environ.get("ADMIN_PASSWORD"))))
         db.session.commit()
 
