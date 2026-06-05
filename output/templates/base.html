@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{% block title %}FaceAttend{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="nav-logo">
+                <span class="logo-mark">FA</span>
+                <span>FaceAttend</span>
+            </a>
+            <div class="nav-links" id="navLinks">
+                {% if session.get('role') == 'admin' %}
+                    <span class="nav-user">Admin</span>
+                    <a href="{{ url_for('admin_dashboard') }}" class="nav-link">Dashboard</a>
+                    <a href="{{ url_for('admin_students') }}" class="nav-link">Students</a>
+                    <a href="{{ url_for('admin_lecturers') }}" class="nav-link">Lecturers</a>
+                    <a href="{{ url_for('admin_reset_password') }}" class="nav-link">Reset Password</a>
+                    <a href="{{ url_for('logout') }}" class="nav-link nav-link--logout">Logout</a>
+                {% elif session.get('role') == 'lecturer' %}
+                    <span class="nav-user">{{ session.get('user_name', 'Lecturer') }}</span>
+                    <a href="{{ url_for('lecturer_dashboard') }}" class="nav-link">Dashboard</a>
+                    <a href="{{ url_for('create_course') }}" class="nav-link">New Course</a>
+                    <a href="{{ url_for('lecturer_attendance') }}" class="nav-link">Records</a>
+                    <a href="{{ url_for('logout') }}" class="nav-link nav-link--logout">Logout</a>
+                {% elif session.get('role') == 'student' %}
+                    <span class="nav-user">{{ session.get('user_name', 'Student') }}</span>
+                    <a href="{{ url_for('student_dashboard') }}" class="nav-link">Dashboard</a>
+                    <a href="{{ url_for('student_courses') }}" class="nav-link">Courses</a>
+                    <a href="{{ url_for('student_mark_attendance') }}" class="nav-link nav-link--gold">Mark Attendance</a>
+                    <a href="{{ url_for('student_history') }}" class="nav-link">History</a>
+                    <a href="{{ url_for('logout') }}" class="nav-link nav-link--logout">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="nav-link nav-link--gold">Login</a>
+                {% endif %}
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-container">
+            {% for category, message in messages %}
+            <div class="flash flash--{{ category }}">
+                {{ message }}
+                <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <strong>FaceAttend</strong> · Smart Attendance System · Redeemer's University
+    </footer>
+
+    <script>
+    // Nav toggle — close on link click (mobile)
+    const navToggle = document.getElementById('navToggle');
+    const navLinks = document.getElementById('navLinks');
+    if (navToggle) {
+        navToggle.addEventListener('click', () => navLinks.classList.toggle('open'));
+        navLinks.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => navLinks.classList.remove('open'));
+        });
+    }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Students — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Students</h1>
+    <p>{{ students|length }} registered</p>
+</div>
+
+{% if students %}
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Matric No</th>
+                <th>Face</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td style="font-family: monospace; font-size: 0.8rem;">{{ s.matric }}</td>
+                <td>
+                    {% if s.face_encoding %}
+                        <span class="badge badge--active">Enrolled</span>
+                    {% else %}
+                        <span class="badge badge--terminated">Missing</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('admin_delete_student', sid=s.id) }}"
+                          onsubmit="return confirm('Delete {{ s.name }}?')">
+                        <button type="submit" class="btn btn--danger btn--sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">👤</div>
+    <p>No students registered yet</p>
+</div>
+{% endif %}
+{% endblock %}

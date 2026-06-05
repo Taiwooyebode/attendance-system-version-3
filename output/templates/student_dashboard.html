@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Student Dashboard — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Welcome, {{ student.name }}</h1>
+    <p>{{ student.matric }}</p>
+</div>
+
+{% if not face_enrolled %}
+<div class="cta-banner" style="background: var(--error-bg, #fef2f2); border-left: 4px solid var(--error);">
+    <h3>⚠️ Face Not Enrolled</h3>
+    <p>You must enroll your face before you can mark attendance.</p>
+    <a href="{{ url_for('student_enroll_face') }}" class="btn btn--gold">Enroll Face Now</a>
+</div>
+{% else %}
+<div class="cta-banner">
+    <h3>📸 Mark Attendance</h3>
+    <p>Enter session code, verify face & location</p>
+    <a href="{{ url_for('student_mark_attendance') }}" class="btn btn--gold">Mark Now</a>
+</div>
+{% endif %}
+
+<div class="section-title">My Courses</div>
+{% if course_stats %}
+<div class="card-grid">
+    {% for cs in course_stats %}
+    <div class="att-stat-card">
+        <h4>{{ cs.course.code }}</h4>
+        <div class="subtitle">{{ cs.course.title }}</div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <span class="pct">{{ cs.percentage }}%</span>
+            <span class="text-sm text-muted">{{ cs.attended }}/{{ cs.total }} sessions</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill {% if cs.percentage >= 75 %}progress-fill--success{% elif cs.percentage >= 50 %}progress-fill--warning{% else %}progress-fill--danger{% endif %}"
+                 style="width: {{ cs.percentage }}%"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div class="mt-2">
+    <a href="{{ url_for('student_courses') }}" class="btn btn--outline">Browse More Courses</a>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📚</div>
+    <p>You are not enrolled in any courses yet</p>
+    <a href="{{ url_for('student_courses') }}" class="btn btn--gold mt-2">Browse Courses</a>
+</div>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Admin Dashboard — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Admin Dashboard</h1>
+    <p>Manage student and lecturer activities</p>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card stat-card--navy">
+        <div class="stat-label">Students</div>
+        <div class="stat-value">{{ total_students }}</div>
+    </div>
+    <div class="stat-card stat-card--gold">
+        <div class="stat-label">Lecturers</div>
+        <div class="stat-value">{{ total_lecturers }}</div>
+    </div>
+</div>
+
+<div class="section-title">Manage Accounts</div>
+<div class="card-grid">
+    <a href="{{ url_for('admin_students') }}" class="quick-card">
+        <div class="quick-card-icon quick-card-icon--success">📋</div>
+        <h3>Students</h3>
+        <p>View and manage student accounts</p>
+    </a>
+    <a href="{{ url_for('admin_lecturers') }}" class="quick-card">
+        <div class="quick-card-icon quick-card-icon--navy">👥</div>
+        <h3>Lecturers</h3>
+        <p>View and manage lecturer accounts</p>
+    </a>
+    <a href="{{ url_for('admin_reset_password') }}" class="quick-card">
+        <div class="quick-card-icon quick-card-icon--gold">🔑</div>
+        <h3>Reset Password</h3>
+        <p>Send a temporary password to a student or lecturer</p>
+    </a>
+</div>
+
+<div class="card mt-2" style="background: var(--info-bg, #eff6ff); border-left: 3px solid var(--navy);">
+    <p class="text-sm" style="margin: 0;">
+        Students self-register and enroll their own faces. Lecturer accounts are created here by the admin —
+        each lecturer is emailed a default password and is required to reset it on first login.
+    </p>
+</div>
+{% endblock %}
+

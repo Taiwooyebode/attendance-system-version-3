@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Lecturer Dashboard — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Welcome, {{ lecturer.name }}</h1>
+    <p>{% if lecturer.department %}{{ lecturer.department }} · {% endif %}Manage your courses and attendance</p>
+</div>
+
+{% if open_sessions %}
+<div class="section-title">🔴 Live Sessions</div>
+<div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.5rem;">
+    {% for s in open_sessions %}
+    <div class="session-code-display">
+        <div class="label">Session Code</div>
+        <div class="code">{{ s.code }}</div>
+        <div class="course-name">{{ s.course.code }} — {{ s.course.title }}</div>
+        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <a href="{{ url_for('live_session', sid=s.id) }}" class="btn btn--success btn--sm">View Live List</a>
+            <form method="POST" action="{{ url_for('end_session', sid=s.id) }}" style="display:inline">
+                <button type="submit" class="btn btn--danger btn--sm">End Session</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="section-title">Active Courses</div>
+{% if active_courses %}
+<div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+    {% for c in active_courses %}
+    <div class="course-card">
+        <div class="course-card__info">
+            <h3>{{ c.code }} — {{ c.title }}</h3>
+            <p>{{ c.enrollments|length }} students enrolled</p>
+        </div>
+        <div class="course-card__actions">
+            <button class="btn btn--gold btn--sm start-session-btn"
+                    data-course-id="{{ c.id }}" data-course-code="{{ c.code }}">
+                Start Session
+            </button>
+            <a href="{{ url_for('view_roster', cid=c.id) }}" class="btn btn--outline btn--sm">Roster</a>
+            <form method="POST" action="{{ url_for('terminate_course', cid=c.id) }}" style="display:inline">
+                <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('Terminate {{ c.code }}?')">Terminate</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state mb-2">
+    <div class="empty-state-icon">📚</div>
+    <p>No active courses. <a href="{{ url_for('create_course') }}">Create one</a></p>
+</div>
+{% endif %}
+
+{% if terminated_courses %}
+<div class="section-title">Terminated Courses</div>
+<div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for c in terminated_courses %}
+    <div class="course-card" style="opacity: 0.7;">
+        <div class="course-card__info">
+            <h3>{{ c.code }} — {{ c.title }}</h3>
+            <p><span class="badge badge--terminated">Terminated</span></p>
+        </div>
+        <div class="course-card__actions">
+            <form method="POST" action="{{ url_for('reactivate_course', cid=c.id) }}" style="display:inline">
+                <button type="submit" class="btn btn--outline btn--sm">Reactivate</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Session start modal -->
+<div id="sessionModal" class="modal-overlay hidden">
+    <div class="card">
+        <h3 style="font-family:var(--font-display);color:var(--navy);margin-bottom:0.5rem;">Starting Session</h3>
+        <div id="modalGeoStatus" class="geo-status geo-status--pending">
+            <span class="geo-dot geo-dot--pending"></span>
+            Getting your location...
+        </div>
+        <p class="text-sm text-muted mb-2">Your GPS location sets the classroom boundary for students.</p>
+        <div class="flex-gap" style="justify-content:center;">
+            <button id="modalConfirm" class="btn btn--gold" disabled>Confirm & Start</button>
+            <button id="modalCancel" class="btn btn--outline">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modal = document.getElementById('sessionModal');
+const geoStatus = document.getElementById('modalGeoStatus');
+const confirmBtn = document.getElementById('modalConfirm');
+const cancelBtn = document.getElementById('modalCancel');
+let pendingCourseId = null;
+let geoLat = null, geoLon = null;
+
+document.querySelectorAll('.start-session-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        pendingCourseId = btn.dataset.courseId;
+        geoLat = null; geoLon = null;
+        confirmBtn.disabled = true;
+        modal.classList.remove('hidden');
+
+        geoStatus.className = 'geo-status geo-status--pending';
+        geoStatus.innerHTML = '<span class="geo-dot geo-dot--pending"></span> Getting your location...';
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => {
+                    geoLat = pos.coords.latitude;
+                    geoLon = pos.coords.longitude;
+                    geoStatus.className = 'geo-status geo-status--ok';
+                    geoStatus.innerHTML = '<span class="geo-dot geo-dot--ok"></span> Location captured (' + geoLat.toFixed(4) + ', ' + geoLon.toFixed(4) + ')';
+                    confirmBtn.disabled = false;
+                },
+                err => {
+                    geoStatus.className = 'geo-status geo-status--fail';
+                    geoStatus.innerHTML = '<span class="geo-dot geo-dot--fail"></span> Location unavailable. Session will start without GPS check.';
+                    confirmBtn.disabled = false;
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            geoStatus.className = 'geo-status geo-status--fail';
+            geoStatus.innerHTML = '<span class="geo-dot geo-dot--fail"></span> Geolocation not supported.';
+            confirmBtn.disabled = false;
+        }
+    });
+});
+
+cancelBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+});
+
+// Close modal on backdrop click
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.add('hidden');
+});
+
+confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Starting...';
+
+    const formData = new FormData();
+    if (geoLat !== null) formData.append('latitude', geoLat);
+    if (geoLon !== null) formData.append('longitude', geoLon);
+
+    try {
+        const resp = await fetch(`/lecturer/session/start/${pendingCourseId}`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Failed to start session');
+        }
+    } catch(e) {
+        alert('Network error');
+    }
+    confirmBtn.textContent = 'Confirm & Start';
+    confirmBtn.disabled = false;
+});
+</script>
+{% endblock %}

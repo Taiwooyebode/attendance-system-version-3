@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Courses — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Available Courses</h1>
+    <p>Enroll yourself in any active course</p>
+</div>
+
+{% if courses %}
+<div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for c in courses %}
+    <div class="course-card">
+        <div class="course-card__info">
+            <h3>{{ c.code }} — {{ c.title }}</h3>
+            <p>Lecturer: {{ c.lecturer.name }}{% if c.lecturer.department %} · {{ c.lecturer.department }}{% endif %}</p>
+        </div>
+        <div class="course-card__actions">
+            {% if c.id in enrolled_ids %}
+                <span class="badge badge--active">Enrolled</span>
+                <form method="POST" action="{{ url_for('student_self_unenroll', cid=c.id) }}" style="display:inline"
+                      onsubmit="return confirm('Unenroll from {{ c.code }}?')">
+                    <button type="submit" class="btn btn--outline btn--sm">Unenroll</button>
+                </form>
+            {% else %}
+                <form method="POST" action="{{ url_for('student_self_enroll', cid=c.id) }}" style="display:inline">
+                    <button type="submit" class="btn btn--gold btn--sm">Enroll</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📚</div>
+    <p>No active courses available right now</p>
+</div>
+{% endif %}
+{% endblock %}

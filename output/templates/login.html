@@ -1,0 +1,64 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login — FaceAttend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="logo-mark">FA</div>
+                <h1>FaceAttend</h1>
+                <p>Smart Attendance System</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash flash--{{ category }}" style="margin-bottom: 1rem;">
+                        {{ message }}
+                        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="form-group">
+                    <label class="form-label" for="identifier">Username / Email / Matric No</label>
+                    <input class="form-input" type="text" id="identifier" name="identifier"
+                           placeholder="e.g.lecturer@email.com, or RUN/CMP/22/12345"
+                           autocomplete="username" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input class="form-input" type="password" id="password" name="password"
+                           placeholder="Enter your password"
+                           autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn--gold btn--block btn--lg">Sign In</button>
+            </form>
+
+            <div class="login-hint">
+                <strong>Lecturers</strong> use their email · <strong>Students</strong> use their matric number
+            </div>
+
+            <div style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid #e5e7eb; text-align: center; font-size: 0.9rem;">
+                <div style="margin-bottom: 0.5rem; color: var(--text-muted);">New student?</div>
+                <a href="{{ url_for('signup_student') }}" style="color: var(--navy); font-weight: 600;">Create a student account</a>
+            </div>
+
+            <div style="margin-top: 0.75rem; text-align: center; font-size: 0.9rem;">
+                <a href="{{ url_for('reset_password_request') }}" style="color: var(--text-muted); text-decoration: underline;">Forgot password? Reset it</a>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

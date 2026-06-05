@@ -1,0 +1,59 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reset Password — FaceAttend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="logo-mark">FA</div>
+                <h1>FaceAttend</h1>
+                <p>Reset Password</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash flash--{{ category }}" style="margin-bottom: 1rem;">
+                        {{ message }}
+                        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.5;">
+                Submit your details and the admin will send a new password to your Gmail.
+            </p>
+
+            <form method="POST" action="{{ url_for('reset_password_request') }}">
+                <div class="form-group">
+                    <label class="form-label" for="matric_or_email">Matric Number / Lecturer Email</label>
+                    <input class="form-input" type="text" id="matric_or_email" name="matric_or_email"
+                           placeholder="RUN/CMP/22/12345 or lecturer@email.com"
+                           required autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="receiving_gmail">Gmail to Receive New Password</label>
+                    <input class="form-input" type="email" id="receiving_gmail" name="receiving_gmail"
+                           placeholder="yourname@gmail.com"
+                           required>
+                </div>
+                <button type="submit" class="btn btn--gold btn--block btn--lg">Send Reset Request</button>
+            </form>
+
+            <div style="margin-top: 1.25rem; text-align: center; font-size: 0.9rem;">
+                <a href="{{ url_for('login') }}" style="color: var(--text-muted); text-decoration: underline;">Back to login</a>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

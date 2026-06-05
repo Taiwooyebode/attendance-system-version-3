@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Roster — {{ course.code }} — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ course.code }} — Roster</h1>
+    <p>{{ course.title }} · {{ enrollments|length }} student{{ '' if enrollments|length == 1 else 's' }} enrolled</p>
+</div>
+
+<div class="card mb-2" style="background: var(--info-bg, #eff6ff); border-left: 3px solid var(--navy);">
+    <p class="text-sm" style="margin: 0;">
+        Students self-enroll in this course from their dashboard. This list is read-only.
+    </p>
+</div>
+
+{% if enrollments %}
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Matric No</th>
+                <th>Face Enrolled</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in enrollments %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ e.student.name }}</td>
+                <td style="font-family: monospace; font-size: 0.8rem;">{{ e.student.matric }}</td>
+                <td>
+                    {% if e.student.face_encoding %}
+                        <span class="badge badge--active">Yes</span>
+                    {% else %}
+                        <span class="badge badge--terminated">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📋</div>
+    <p>No students have enrolled yet</p>
+</div>
+{% endif %}
+
+<div class="mt-2">
+    <a href="{{ url_for('lecturer_dashboard') }}" class="btn btn--outline">← Back to Dashboard</a>
+</div>
+{% endblock %}

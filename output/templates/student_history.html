@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Attendance History — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Attendance History</h1>
+    <p>View your attendance records by course</p>
+</div>
+
+<div class="filter-bar">
+    <div class="form-group">
+        <label class="form-label">Course</label>
+        <select class="form-select" id="courseFilter" onchange="applyFilter()">
+            <option value="">— Select course —</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}" {% if selected_course == c.id %}selected{% endif %}>{{ c.code }} — {{ c.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+{% if records %}
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Course</th>
+                <th>Date</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td>{{ r.course.code }}</td>
+                <td>{{ r.timestamp.strftime('%Y-%m-%d') }}</td>
+                <td>{{ r.timestamp.strftime('%H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-sm text-muted mt-1">{{ records|length }} record(s)</p>
+{% elif selected_course %}
+<div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <p>No attendance records found for this course</p>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <p>Select a course to view your history</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter() {
+    const course = document.getElementById('courseFilter').value;
+    let url = '{{ url_for("student_history") }}';
+    if (course) url += '?course=' + course;
+    window.location.href = url;
+}
+</script>
+{% endblock %}

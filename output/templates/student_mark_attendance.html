@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}Mark Attendance — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="scan-container">
+    <div class="page-header" style="text-align:center;">
+        <h1>Mark Attendance</h1>
+        <p>Enter session code, verify your face & location</p>
+    </div>
+
+    <div class="card">
+        <!-- Step 1: Session Code -->
+        <div class="form-group">
+            <label class="form-label">Session Code</label>
+            <input class="form-input" type="text" id="sessionCode" maxlength="6"
+                   placeholder="Enter 6-digit code from lecturer"
+                   style="text-align: center; font-size: 1.3rem; font-weight: 700; letter-spacing: 0.2em; font-family: monospace;"
+                   inputmode="numeric" pattern="[0-9]*">
+        </div>
+
+        <!-- Step 2: Location -->
+        <div id="geoStatus" class="geo-status geo-status--pending">
+            <span class="geo-dot geo-dot--pending"></span>
+            Getting your location...
+        </div>
+
+        <!-- Step 3: Camera -->
+        <div class="camera-wrapper">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <div class="camera-overlay">
+                <div class="scan-frame"></div>
+            </div>
+        </div>
+
+        <button id="verifyBtn" class="btn btn--gold btn--block btn--lg" disabled>
+            Verify & Mark Attendance
+        </button>
+
+        <div id="result" class="hidden"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const verifyBtn = document.getElementById('verifyBtn');
+const codeInput = document.getElementById('sessionCode');
+const resultDiv = document.getElementById('result');
+const geoStatusDiv = document.getElementById('geoStatus');
+let stream = null;
+let geoLat = null, geoLon = null;
+let geoReady = false, cameraReady = false;
+
+// Start camera immediately
+async function startCamera() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        video.srcObject = stream;
+        cameraReady = true;
+        checkReady();
+    } catch(e) {
+        resultDiv.className = 'scan-result scan-result--error';
+        resultDiv.textContent = 'Camera access denied. Please allow camera access.';
+        resultDiv.classList.remove('hidden');
+    }
+}
+
+// Get location
+function getLocation() {
+    if (!navigator.geolocation) {
+        geoStatusDiv.className = 'geo-status geo-status--fail';
+        geoStatusDiv.innerHTML = '<span class="geo-dot geo-dot--fail"></span> Geolocation not supported';
+        geoReady = true;
+        checkReady();
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            geoLat = pos.coords.latitude;
+            geoLon = pos.coords.longitude;
+            geoStatusDiv.className = 'geo-status geo-status--ok';
+            geoStatusDiv.innerHTML = '<span class="geo-dot geo-dot--ok"></span> Location captured';
+            geoReady = true;
+            checkReady();
+        },
+        err => {
+            geoStatusDiv.className = 'geo-status geo-status--fail';
+            geoStatusDiv.innerHTML = '<span class="geo-dot geo-dot--fail"></span> Location unavailable — attendance may be rejected';
+            geoReady = true;
+            checkReady();
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+    );
+}
+
+function checkReady() {
+    verifyBtn.disabled = !(cameraReady && geoReady && codeInput.value.trim().length >= 4);
+}
+
+codeInput.addEventListener('input', checkReady);
+
+// Verify
+verifyBtn.addEventListener('click', async () => {
+    const code = codeInput.value.trim();
+    if (!code) {
+        showResult('Enter the session code.', false);
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'Verifying...';
+    resultDiv.classList.add('hidden');
+
+    try {
+        const body = {
+            session_code: code,
+            image: imageData
+        };
+        if (geoLat !== null) {
+            body.latitude = geoLat;
+            body.longitude = geoLon;
+        }
+
+        const resp = await fetch('/api/verify-attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+            showResult(data.message + (data.confidence ? ' (' + data.confidence + '% match)' : ''), true);
+        } else {
+            showResult(data.message, false);
+        }
+    } catch(e) {
+        showResult('Network error. Check your connection.', false);
+    }
+
+    verifyBtn.disabled = false;
+    verifyBtn.textContent = 'Verify & Mark Attendance';
+});
+
+function showResult(msg, success) {
+    resultDiv.className = 'scan-result scan-result--' + (success ? 'success' : 'error');
+    resultDiv.innerHTML = '<strong>' + msg + '</strong>';
+    resultDiv.classList.remove('hidden');
+}
+
+// Init
+startCamera();
+getLocation();
+</script>
+{% endblock %}

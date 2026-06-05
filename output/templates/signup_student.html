@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Signup — FaceAttend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="logo-mark">FA</div>
+                <h1>Student Signup</h1>
+                <p>Create your FaceAttend account</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="flash flash--{{ category }}" style="margin-bottom: 1rem;">
+                        {{ message }}
+                        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('signup_student') }}">
+                <div class="form-group">
+                    <label class="form-label" for="name">Full Name</label>
+                    <input class="form-input" type="text" id="name" name="name" required placeholder="John Doe" autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="matric">Matric Number</label>
+                    <input class="form-input" type="text" id="matric" name="matric" required placeholder="RUN/CMP/22/12345">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input class="form-input" type="password" id="password" name="password" required placeholder="Choose a password">
+                </div>
+                <button type="submit" class="btn btn--gold btn--block btn--lg">Create Account</button>
+            </form>
+
+            <div class="login-hint" style="margin-top: 1rem;">
+                After signup, you'll be asked to <strong>enroll your face</strong> before you can mark attendance.
+            </div>
+
+            <div style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid #e5e7eb; text-align: center; font-size: 0.9rem;">
+                Already have an account? <a href="{{ url_for('login') }}" style="color: var(--navy); font-weight: 600;">Sign in</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

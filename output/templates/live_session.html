@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}Live Session — {{ att_session.course.code }} — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="session-code-display">
+    <div class="label">Session Code — Show this in class</div>
+    <div class="code">{{ att_session.code }}</div>
+    <div class="course-name">{{ att_session.course.code }} — {{ att_session.course.title }}</div>
+</div>
+
+<div class="action-row">
+    <div>
+        <h2 style="font-family: var(--font-display); font-size: 1.1rem; color: var(--navy);">
+            Live Attendance <span id="countBadge" class="badge badge--open">{{ attendances|length }}</span>
+        </h2>
+        <p class="text-sm text-muted">Auto-refreshes every 5 seconds</p>
+    </div>
+    <form method="POST" action="{{ url_for('end_session', sid=att_session.id) }}">
+        <button type="submit" class="btn btn--danger" onclick="return confirm('End this session?')">End Session</button>
+    </form>
+</div>
+
+<div class="card" id="attendeeList">
+    {% if attendances %}
+        {% for a in attendances %}
+        <div class="attendee-item" data-id="{{ a.id }}">
+            <div class="attendee-info">
+                <span class="attendee-name">{{ a.student.name }}</span>
+                <span class="attendee-meta">{{ a.student.matric }} · {{ a.timestamp.strftime('%H:%M:%S') }}</span>
+            </div>
+            <button class="btn btn--danger btn--sm revoke-btn" data-id="{{ a.id }}">Revoke</button>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state" id="emptyState">
+            <div class="empty-state-icon">⏳</div>
+            <p>Waiting for students to mark attendance...</p>
+        </div>
+    {% endif %}
+</div>
+
+<div class="mt-2">
+    <a href="{{ url_for('lecturer_dashboard') }}" class="btn btn--outline">← Back to Dashboard</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const sessionId = {{ att_session.id }};
+const list = document.getElementById('attendeeList');
+const countBadge = document.getElementById('countBadge');
+
+// Revoke handler
+list.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.revoke-btn');
+    if (!btn) return;
+    const aid = btn.dataset.id;
+    if (!confirm('Revoke this attendance?')) return;
+
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+        const resp = await fetch(`/lecturer/session/${sessionId}/revoke/${aid}`, { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            btn.closest('.attendee-item').remove();
+            updateCount();
+        }
+    } catch(e) {}
+    btn.disabled = false;
+    btn.textContent = 'Revoke';
+});
+
+function updateCount() {
+    const items = list.querySelectorAll('.attendee-item');
+    countBadge.textContent = items.length;
+}
+
+// Auto-refresh
+async function refresh() {
+    try {
+        const resp = await fetch(`/api/session/${sessionId}/attendees`);
+        const data = await resp.json();
+        countBadge.textContent = data.count;
+
+        if (data.count === 0) {
+            if (!list.querySelector('.empty-state')) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><p>Waiting for students...</p></div>';
+            }
+            return;
+        }
+
+        const existingIds = new Set([...list.querySelectorAll('.attendee-item')].map(el => el.dataset.id));
+        const newIds = new Set(data.attendees.map(a => String(a.id)));
+
+        // Remove revoked
+        list.querySelectorAll('.attendee-item').forEach(el => {
+            if (!newIds.has(el.dataset.id)) el.remove();
+        });
+
+        // Add new
+        const empty = list.querySelector('.empty-state');
+        if (empty && data.count > 0) empty.remove();
+
+        data.attendees.forEach(a => {
+            if (!existingIds.has(String(a.id))) {
+                const div = document.createElement('div');
+                div.className = 'attendee-item';
+                div.dataset.id = a.id;
+                div.innerHTML = `
+                    <div class="attendee-info">
+                        <span class="attendee-name">${a.name}</span>
+                        <span class="attendee-meta">${a.matric} · ${a.time}</span>
+                    </div>
+                    <button class="btn btn--danger btn--sm revoke-btn" data-id="${a.id}">Revoke</button>
+                `;
+                list.prepend(div);
+            }
+        });
+    } catch(e) {}
+}
+
+setInterval(refresh, 5000);
+</script>
+{% endblock %}

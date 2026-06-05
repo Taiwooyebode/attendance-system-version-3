@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Attendance Records — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Attendance Records</h1>
+    <p>Filter and export attendance data</p>
+</div>
+
+<div class="filter-bar">
+    <div class="form-group">
+        <label class="form-label">Course</label>
+        <select class="form-select" id="courseFilter" onchange="applyFilter()">
+            <option value="">— Select course —</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}" {% if selected_course == c.id %}selected{% endif %}>{{ c.code }} — {{ c.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" type="date" id="dateFilter" value="{{ selected_date }}" onchange="applyFilter()">
+    </div>
+    {% if selected_course and records %}
+    <a href="{{ url_for('export_attendance', course=selected_course) }}" class="btn btn--outline btn--sm" style="align-self:end;">Export CSV</a>
+    {% endif %}
+</div>
+
+{% if records %}
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Matric</th>
+                <th>Date/Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td>{{ r.student.name }}</td>
+                <td style="font-family: monospace; font-size: 0.8rem;">{{ r.student.matric }}</td>
+                <td>{{ r.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-sm text-muted mt-1">{{ records|length }} record(s)</p>
+{% elif selected_course %}
+<div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <p>No records found for this filter</p>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <p>Select a course to view records</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilter() {
+    const course = document.getElementById('courseFilter').value;
+    const date = document.getElementById('dateFilter').value;
+    let url = '{{ url_for("lecturer_attendance") }}';
+    const params = [];
+    if (course) params.push('course=' + course);
+    if (date) params.push('date=' + date);
+    if (params.length) url += '?' + params.join('&');
+    window.location.href = url;
+}
+</script>
+{% endblock %}

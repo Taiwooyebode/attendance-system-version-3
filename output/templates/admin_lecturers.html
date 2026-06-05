@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Lecturers — FaceAttend{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap;">
+    <div>
+        <h1>Lecturers</h1>
+        <p>{{ lecturers|length }} registered</p>
+    </div>
+    <a href="{{ url_for('admin_create_lecturer') }}" class="btn btn--gold">+ Add Lecturer</a>
+</div>
+
+{% if lecturers %}
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Dept</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in lecturers %}
+            <tr>
+                <td>{{ l.name }}</td>
+                <td style="font-size: 0.8rem;">{{ l.email }}</td>
+                <td>{{ l.department or '—' }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('admin_delete_lecturer', lid=l.id) }}"
+                          onsubmit="return confirm('Delete {{ l.name }}?')">
+                        <button type="submit" class="btn btn--danger btn--sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">🎓</div>
+    <p>No lecturers registered yet</p>
+</div>
+{% endif %}
+{% endblock %}
