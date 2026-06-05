@@ -79,7 +79,7 @@ def send_reset_password(to_email, name, temp_password, role):
         f"— FaceAttend, Redeemer's University"
     )
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as connection:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as connection:
             connection.login(user=os.environ.get("SMTP_MAIL"), password=os.environ.get("SMTP_PASSWORD"))
             connection.send_message(msg)
         return True, None
@@ -89,8 +89,7 @@ def send_reset_password(to_email, name, temp_password, role):
 
 def send_lecturer_credentials(to_email, name, default_password):
     if not os.environ.get("SMTP_MAIL") or not os.environ.get("SMTP_PASSWORD"):
-        return False, "SMTP not configured. Set SMTP_EMAIL and SMTP_PASSWORD in app.py."
-
+        return False, "SMTP not configured. Set SMTP_MAIL and SMTP_PASSWORD."
     msg = EmailMessage()
     msg["Subject"] = "Your FaceAttend Lecturer Account"
     msg["From"] = os.environ.get("SMTP_MAIL")
@@ -103,9 +102,8 @@ def send_lecturer_credentials(to_email, name, default_password):
         f"You will be required to set a new password on your first login.\n\n"
         f"— FaceAttend, Redeemer's University"
     )
-
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as connection:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as connection:
             connection.login(user=os.environ.get("SMTP_MAIL"), password=os.environ.get("SMTP_PASSWORD"))
             connection.send_message(msg)
         return True, None
@@ -458,7 +456,7 @@ def reset_password_request():
         )
 
         try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as connection:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as connection:
                 connection.login(user=os.environ.get("SMTP_MAIL"), password=os.environ.get("SMTP_PASSWORD"))
                 connection.send_message(msg)
             flash("Reset request sent. Await your new password via Gmail.", "success")
