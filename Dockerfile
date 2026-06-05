@@ -20,6 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8080
-
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--timeout", "120", "--preload", "--workers", "2", "output.app:app"]
+# 1. Instruct Gunicorn to bind to the dynamic port variable provided by Railway
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --timeout 120 output.app:app"]
