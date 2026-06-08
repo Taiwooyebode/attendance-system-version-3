@@ -21,6 +21,51 @@ load_dotenv()
 
 
 
+
+# ── Liveness Detection (dlib 68-point landmarks)─
+
+_LANDMARK_PATH = os.path.join(os.path.dirname(__file__), "shape_predictor_68_face_landmarks.dat")
+try:
+    _dlib_detector = dlib.get_frontal_face_detector()
+    _dlib_predictor = dlib.shape_predictor(_LANDMARK_PATH)
+except Exception as _e:
+    _dlib_detector = None
+    _dlib_predictor = None
+    print(f"[liveness] Could not load landmark model: {_e}")
+
+_LEFT_EYE  = list(range(42, 48))
+_RIGHT_EYE = list(range(36, 42))
+EAR_OPEN_THRESHOLD   = 0.25
+EAR_CLOSED_THRESHOLD = 0.20
+
+
+def _eye_aspect_ratio(landmarks, eye_idx):
+    pts = [(landmarks.part(i).x, landmarks.part(i).y) for i in eye_idx]
+    a = dist_metrics.euclidean(pts[1], pts[5])
+    b = dist_metrics.euclidean(pts[2], pts[4])
+    c = dist_metrics.euclidean(pts[0], pts[3])
+    if c == 0:
+        return 0.0
+    return (a + b) / (2.0 * c)
+
+
+def _avg_ear(rgb_img):
+    """Average EAR for the largest detected face, or None."""
+    if _dlib_detector is None or _dlib_predictor is None:
+        return None
+    gray = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2GRAY)
+    faces = _dlib_detector(gray, 0)
+    if len(faces) == 0:
+        return None
+    face = max(faces, key=lambda r: r.width() * r.height())
+    shape = _dlib_predictor(gray, face)
+    left = _eye_aspect_ratio(shape, _LEFT_EYE)
+    right = _eye_aspect_ratio(shape, _RIGHT_EYE)
+    return (left + right) / 2.0
+
+
+# ── Helpers ───────────────────────────────────────────────────────
+
 def decode_face_image(base64_string):
     if ',' in base64_string:
         base64_string = base64_string.split(',', 1)[1]
@@ -714,6 +759,7 @@ def session_attendees(sid):
     ]})
 
 # Records
+    
 @app.route('/lecturer/attendance')
 @lecturer_required
 def lecturer_attendance():
@@ -721,8 +767,13 @@ def lecturer_attendance():
     courses = Course.query.filter_by(lecturer_id=lid).all()
     cid = request.args.get('course', type=int)
     date_filter = request.args.get('date', '')
+
     records = []
+    summary = []
+    total_sessions = 0
+
     if cid:
+        # raw date-filtered rows (second tab)
         q = Attendance.query.filter_by(course_id=cid, lecturer_id=lid, revoked=False)
         if date_filter:
             try:
@@ -731,7 +782,30 @@ def lecturer_attendance():
             except ValueError:
                 pass
         records = q.order_by(Attendance.timestamp.desc()).all()
-    return render_template('lecturer_attendance.html', courses=courses, records=records,
+
+        # per-student percentage summary (primary tab)
+        total_sessions = AttendanceSession.query.filter_by(course_id=cid).count()
+        enrollments = Enrollment.query.filter_by(course_id=cid).all()
+        for e in enrollments:
+            attended = (
+                db.session.query(Attendance.session_id)
+                .filter_by(student_id=e.student_id, course_id=cid, revoked=False)
+                .filter(Attendance.session_id.isnot(None))
+                .distinct()
+                .count()
+            )
+            pct = round((attended / total_sessions) * 100, 1) if total_sessions else 0.0
+            summary.append({
+                'student': e.student,
+                'attended': attended,
+                'total': total_sessions,
+                'percentage': pct,
+            })
+        summary.sort(key=lambda r: r['percentage'], reverse=True)
+
+    return render_template('lecturer_attendance.html',
+                           courses=courses, records=records, summary=summary,
+                           total_sessions=total_sessions,
                            selected_course=cid, selected_date=date_filter)
 
 @app.route('/lecturer/attendance/export')
@@ -808,7 +882,6 @@ def student_dashboard():
     face_enrolled = student.face_encoding is not None
     return render_template('student_dashboard.html', student=student,
                            course_stats=course_stats, face_enrolled=face_enrolled)
-
 
 @app.route('/student/enroll-face', methods=['GET', 'POST'])
 @student_required
@@ -928,14 +1001,15 @@ def verify_attendance():
         return jsonify({'success': False, 'message': 'No data received.'}), 400
 
     code = data.get('session_code', '').strip()
-    face_image = data.get('image', '')
+    face_image = data.get('image', '')          # eyes OPEN frame (identity)
+    blink_image = data.get('blink_image', '')   # eyes CLOSED frame (liveness)
     slat = data.get('latitude')
     slon = data.get('longitude')
 
     if not code:
         return jsonify({'success': False, 'message': 'Enter the session code.'}), 400
-    if not face_image:
-        return jsonify({'success': False, 'message': 'Face capture required.'}), 400
+    if not face_image or not blink_image:
+        return jsonify({'success': False, 'message': 'Both face captures required (open + blink).'}), 400
 
     att_session = AttendanceSession.query.filter_by(code=code, is_open=True).first()
     if not att_session:
@@ -955,19 +1029,35 @@ def verify_attendance():
         if dist > app.config['GEO_RADIUS_METERS']:
             return jsonify({'success': False, 'message': f'Too far from class ({int(dist)}m). Move closer.'}), 400
 
-    # Face verify
+    # Decode both frames
     try:
-        rgb_img, _ = decode_face_image(face_image)
+        open_rgb, _ = decode_face_image(face_image)
+        blink_rgb, _ = decode_face_image(blink_image)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Image error: {str(e)}'}), 400
 
-    locs = face_recognition.face_locations(rgb_img)
+    # ---- LIVENESS: blink detection BEFORE face matching ----
+    if _dlib_predictor is None:
+        return jsonify({'success': False, 'message': 'Liveness model unavailable. Contact admin.'}), 500
+
+    open_ear = _avg_ear(open_rgb)
+    blink_ear = _avg_ear(blink_rgb)
+    if open_ear is None or blink_ear is None:
+        return jsonify({'success': False, 'message': 'Could not detect eyes in one of the frames. Retry.'}), 400
+    if open_ear < EAR_OPEN_THRESHOLD:
+        return jsonify({'success': False, 'message': 'Keep your eyes open for the first capture.'}), 400
+    if blink_ear > EAR_CLOSED_THRESHOLD:
+        return jsonify({'success': False, 'message': 'Blink not detected. Please blink when prompted.'}), 400
+    # eyes were open, then closed -> live person confirmed
+
+    # ---- FACE MATCH on the open-eyes frame ----
+    locs = face_recognition.face_locations(open_rgb)
     if len(locs) == 0:
         return jsonify({'success': False, 'message': 'No face detected.'}), 400
     if len(locs) > 1:
         return jsonify({'success': False, 'message': 'Multiple faces detected.'}), 400
 
-    encs = face_recognition.face_encodings(rgb_img, locs)
+    encs = face_recognition.face_encodings(open_rgb, locs)
     if not encs:
         return jsonify({'success': False, 'message': 'Could not process face.'}), 400
 
