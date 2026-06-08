@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Attendance Records</h1>
-    <p>Filter and export attendance data</p>
+    <p>View per-student attendance percentage or raw daily records</p>
 </div>
 
 <div class="filter-bar">
@@ -17,7 +17,7 @@
             {% endfor %}
         </select>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="dateGroup" style="display:none;">
         <label class="form-label">Date</label>
         <input class="form-input" type="date" id="dateFilter" value="{{ selected_date }}" onchange="applyFilter()">
     </div>
@@ -26,37 +26,95 @@
     {% endif %}
 </div>
 
-{% if records %}
-<div class="table-wrap">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Student</th>
-                <th>Matric</th>
-                <th>Date/Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in records %}
-            <tr>
-                <td>{{ r.student.name }}</td>
-                <td style="font-family: monospace; font-size: 0.8rem;">{{ r.student.matric }}</td>
-                <td>{{ r.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% if selected_course %}
+<div class="tabs" style="display:flex; gap:0.5rem; margin: 0.5rem 0 1.25rem; border-bottom:1px solid #e5e7eb;">
+    <button class="tab-btn" id="tab-summary-btn" onclick="showTab('summary')"
+            style="padding:0.6rem 1rem; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:3px solid transparent;">
+        Summary (%)
+    </button>
+    <button class="tab-btn" id="tab-raw-btn" onclick="showTab('raw')"
+            style="padding:0.6rem 1rem; border:none; background:none; cursor:pointer; font-weight:600; border-bottom:3px solid transparent;">
+        Raw Records
+    </button>
 </div>
-<p class="text-sm text-muted mt-1">{{ records|length }} record(s)</p>
-{% elif selected_course %}
-<div class="empty-state">
-    <div class="empty-state-icon">📊</div>
-    <p>No records found for this filter</p>
+
+<!-- ── Summary tab ── -->
+<div id="tab-summary">
+    {% if summary %}
+    <p class="text-sm text-muted mb-1">{{ total_sessions }} session(s) held for this course.</p>
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Matric</th>
+                    <th>Attended</th>
+                    <th>Sessions Held</th>
+                    <th>Attendance %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary %}
+                <tr>
+                    <td>{{ row.student.name }}</td>
+                    <td style="font-family: monospace; font-size: 0.8rem;">{{ row.student.matric }}</td>
+                    <td>{{ row.attended }}</td>
+                    <td>{{ row.total }}</td>
+                    <td>
+                        <span style="font-weight:700;
+                            color: {% if row.percentage >= 75 %}#16a34a{% elif row.percentage >= 50 %}#b8891a{% else %}#dc2626{% endif %};">
+                            {{ row.percentage }}%
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-sm text-muted mt-1">{{ summary|length }} enrolled student(s)</p>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <p>No students enrolled in this course yet</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Raw records tab ── -->
+<div id="tab-raw" style="display:none;">
+    {% if records %}
+    <div class="table-wrap">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Matric</th>
+                    <th>Date/Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td>{{ r.student.name }}</td>
+                    <td style="font-family: monospace; font-size: 0.8rem;">{{ r.student.matric }}</td>
+                    <td>{{ r.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-sm text-muted mt-1">{{ records|length }} record(s)</p>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <p>No raw records for this filter</p>
+    </div>
+    {% endif %}
 </div>
 {% else %}
 <div class="empty-state">
     <div class="empty-state-icon">📊</div>
-    <p>Select a course to view records</p>
+    <p>Select a course to view attendance</p>
 </div>
 {% endif %}
 {% endblock %}
@@ -65,7 +123,8 @@
 <script>
 function applyFilter() {
     const course = document.getElementById('courseFilter').value;
-    const date = document.getElementById('dateFilter').value;
+    const dateEl = document.getElementById('dateFilter');
+    const date = dateEl ? dateEl.value : '';
     let url = '{{ url_for("lecturer_attendance") }}';
     const params = [];
     if (course) params.push('course=' + course);
@@ -73,6 +132,31 @@ function applyFilter() {
     if (params.length) url += '?' + params.join('&');
     window.location.href = url;
 }
+
+function showTab(which) {
+    const summary = document.getElementById('tab-summary');
+    const raw = document.getElementById('tab-raw');
+    const dateGroup = document.getElementById('dateGroup');
+    const sBtn = document.getElementById('tab-summary-btn');
+    const rBtn = document.getElementById('tab-raw-btn');
+    const active = '3px solid var(--gold, #b8891a)';
+    if (which === 'raw') {
+        summary.style.display = 'none';
+        raw.style.display = 'block';
+        if (dateGroup) dateGroup.style.display = '';
+        rBtn.style.borderBottom = active; sBtn.style.borderBottom = '3px solid transparent';
+    } else {
+        summary.style.display = 'block';
+        raw.style.display = 'none';
+        if (dateGroup) dateGroup.style.display = 'none';
+        sBtn.style.borderBottom = active; rBtn.style.borderBottom = '3px solid transparent';
+    }
+}
+// default tab: raw if a date filter is set, else summary
+document.addEventListener('DOMContentLoaded', function() {
+    {% if selected_course %}
+    showTab('{{ "raw" if selected_date else "summary" }}');
+    {% endif %}
+});
 </script>
 {% endblock %}
-

@@ -5,7 +5,7 @@
 <div class="scan-container">
     <div class="page-header" style="text-align:center;">
         <h1>Mark Attendance</h1>
-        <p>Enter session code, verify your face & location</p>
+        <p>Enter session code, pass the liveness check & verify your face</p>
     </div>
 
     <div class="card">
@@ -33,6 +33,12 @@
             </div>
         </div>
 
+        <!-- Liveness prompt -->
+        <div id="livenessPrompt" class="geo-status geo-status--pending" style="margin-top:0.75rem; display:none;">
+            <span class="geo-dot geo-dot--pending"></span>
+            <span id="livenessText">Look at the camera with eyes open...</span>
+        </div>
+
         <button id="verifyBtn" class="btn btn--gold btn--block btn--lg" disabled>
             Verify & Mark Attendance
         </button>
@@ -50,11 +56,12 @@ const verifyBtn = document.getElementById('verifyBtn');
 const codeInput = document.getElementById('sessionCode');
 const resultDiv = document.getElementById('result');
 const geoStatusDiv = document.getElementById('geoStatus');
+const livenessPrompt = document.getElementById('livenessPrompt');
+const livenessText = document.getElementById('livenessText');
 let stream = null;
 let geoLat = null, geoLon = null;
 let geoReady = false, cameraReady = false;
 
-// Start camera immediately
 async function startCamera() {
     try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -70,7 +77,6 @@ async function startCamera() {
     }
 }
 
-// Get location
 function getLocation() {
     if (!navigator.geolocation) {
         geoStatusDiv.className = 'geo-status geo-status--fail';
@@ -104,7 +110,15 @@ function checkReady() {
 
 codeInput.addEventListener('input', checkReady);
 
-// Verify
+function captureFrame() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 verifyBtn.addEventListener('click', async () => {
     const code = codeInput.value.trim();
     if (!code) {
@@ -112,19 +126,30 @@ verifyBtn.addEventListener('click', async () => {
         return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
-
     verifyBtn.disabled = true;
-    verifyBtn.textContent = 'Verifying...';
     resultDiv.classList.add('hidden');
+    livenessPrompt.style.display = 'flex';
+
+    // Frame 1: eyes open
+    livenessPrompt.className = 'geo-status geo-status--pending';
+    livenessText.textContent = 'Keep your eyes OPEN and look at the camera...';
+    await wait(1200);
+    const openImage = captureFrame();
+
+    // Frame 2: blink / eyes closed
+    livenessText.textContent = 'Now BLINK — close your eyes!';
+    livenessPrompt.className = 'geo-status geo-status--pending';
+    await wait(1400);
+    const blinkImage = captureFrame();
+
+    livenessText.textContent = 'Verifying...';
+    verifyBtn.textContent = 'Verifying...';
 
     try {
         const body = {
             session_code: code,
-            image: imageData
+            image: openImage,
+            blink_image: blinkImage
         };
         if (geoLat !== null) {
             body.latitude = geoLat;
@@ -147,6 +172,7 @@ verifyBtn.addEventListener('click', async () => {
         showResult('Network error. Check your connection.', false);
     }
 
+    livenessPrompt.style.display = 'none';
     verifyBtn.disabled = false;
     verifyBtn.textContent = 'Verify & Mark Attendance';
 });
@@ -157,7 +183,6 @@ function showResult(msg, success) {
     resultDiv.classList.remove('hidden');
 }
 
-// Init
 startCamera();
 getLocation();
 </script>

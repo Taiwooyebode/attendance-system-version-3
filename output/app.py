@@ -5,7 +5,9 @@ import string
 import smtplib
 import numpy as np
 import face_recognition
-from datetime import datetime
+import dlib
+from scipy.spatial import distance as dist_metrics
+from datetime import datetime, timezone
 from functools import wraps
 from flask import (
     Flask, render_template, request, redirect,
@@ -15,14 +17,13 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import cv2
 from math import radians, cos, sin, asin, sqrt
-import  os
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
 
-
-# ── Liveness Detection (dlib 68-point landmarks)─
+# ── Liveness Detection (dlib 68-point landmarks) ─────────────────
 
 _LANDMARK_PATH = os.path.join(os.path.dirname(__file__), "shape_predictor_68_face_landmarks.dat")
 try:
@@ -33,10 +34,11 @@ except Exception as _e:
     _dlib_predictor = None
     print(f"[liveness] Could not load landmark model: {_e}")
 
+# Indices for left/right eye in the 68-point model
 _LEFT_EYE  = list(range(42, 48))
 _RIGHT_EYE = list(range(36, 42))
-EAR_OPEN_THRESHOLD   = 0.25
-EAR_CLOSED_THRESHOLD = 0.20
+EAR_OPEN_THRESHOLD   = 0.25   # above this = eyes open
+EAR_CLOSED_THRESHOLD = 0.20   # below this = eyes closed (blink)
 
 
 def _eye_aspect_ratio(landmarks, eye_idx):
@@ -50,7 +52,7 @@ def _eye_aspect_ratio(landmarks, eye_idx):
 
 
 def _avg_ear(rgb_img):
-    """Average EAR for the largest detected face, or None."""
+    """Returns average EAR for the largest detected face, or None."""
     if _dlib_detector is None or _dlib_predictor is None:
         return None
     gray = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2GRAY)
@@ -67,6 +69,7 @@ def _avg_ear(rgb_img):
 # ── Helpers ───────────────────────────────────────────────────────
 
 def decode_face_image(base64_string):
+    """Decode base64 face image to numpy RGB array."""
     if ',' in base64_string:
         base64_string = base64_string.split(',', 1)[1]
     image_bytes = base64.b64decode(base64_string)
@@ -89,10 +92,11 @@ def decode_face_image(base64_string):
 
 
 def haversine(lat1, lon1, lat2, lon2):
+    """Calculate distance in meters between two coordinates."""
     lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
     c = 2 * asin(sqrt(a))
     return 6371000 * c
 
@@ -227,7 +231,7 @@ class AttendanceSession(db.Model):
     is_open = db.Column(db.Boolean, default=True, nullable=False)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     closed_at = db.Column(db.DateTime, nullable=True)
     lecturer_ref = db.relationship('Lecturer', backref='sessions_created')
     attendances = db.relationship('Attendance', backref='att_session', lazy=True)
@@ -239,7 +243,7 @@ class Attendance(db.Model):
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('attendance_session.id'), nullable=True)
     lecturer_id = db.Column(db.Integer, db.ForeignKey('lecturer.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
     lecturer_ref = db.relationship('Lecturer', backref='attendances_recorded')
 
@@ -479,7 +483,7 @@ def reset_password_request():
     if request.method == "POST":
         matric_or_email = request.form.get("matric_or_email", "").strip()
         receiving_gmail = request.form.get("receiving_gmail", "").strip()
-        timestamp       = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
         if not os.environ.get("SMTP_MAIL") or not os.environ.get("SMTP_PASSWORD"):
             flash("SMTP not configured. Contact the administrator directly.", "error")
@@ -701,7 +705,7 @@ def start_session(cid):
     old = AttendanceSession.query.filter_by(course_id=course.id, is_open=True).first()
     if old:
         old.is_open = False
-        old.closed_at = datetime.utcnow()
+        old.closed_at = datetime.now(timezone.utc)
 
     lat = request.form.get('latitude', type=float)
     lon = request.form.get('longitude', type=float)
@@ -720,7 +724,7 @@ def end_session(sid):
         flash('Unauthorized.', 'error')
         return redirect(url_for('lecturer_dashboard'))
     s.is_open = False
-    s.closed_at = datetime.utcnow()
+    s.closed_at = datetime.now(timezone.utc)
     db.session.commit()
     flash('Session closed.', 'success')
     return redirect(url_for('lecturer_dashboard'))
@@ -759,7 +763,6 @@ def session_attendees(sid):
     ]})
 
 # Records
-    
 @app.route('/lecturer/attendance')
 @lecturer_required
 def lecturer_attendance():
@@ -773,7 +776,7 @@ def lecturer_attendance():
     total_sessions = 0
 
     if cid:
-        # raw date-filtered rows (second tab)
+        # ---- raw date-filtered rows (second tab) ----
         q = Attendance.query.filter_by(course_id=cid, lecturer_id=lid, revoked=False)
         if date_filter:
             try:
@@ -783,7 +786,7 @@ def lecturer_attendance():
                 pass
         records = q.order_by(Attendance.timestamp.desc()).all()
 
-        # per-student percentage summary (primary tab)
+        # ---- per-student percentage summary (primary tab) ----
         total_sessions = AttendanceSession.query.filter_by(course_id=cid).count()
         enrollments = Enrollment.query.filter_by(course_id=cid).all()
         for e in enrollments:
@@ -882,6 +885,7 @@ def student_dashboard():
     face_enrolled = student.face_encoding is not None
     return render_template('student_dashboard.html', student=student,
                            course_stats=course_stats, face_enrolled=face_enrolled)
+
 
 @app.route('/student/enroll-face', methods=['GET', 'POST'])
 @student_required
@@ -1001,8 +1005,8 @@ def verify_attendance():
         return jsonify({'success': False, 'message': 'No data received.'}), 400
 
     code = data.get('session_code', '').strip()
-    face_image = data.get('image', '')          # eyes OPEN frame (identity)
-    blink_image = data.get('blink_image', '')   # eyes CLOSED frame (liveness)
+    face_image = data.get('image', '')        # eyes OPEN frame (used for identity)
+    blink_image = data.get('blink_image', '') # eyes CLOSED frame (liveness only)
     slat = data.get('latitude')
     slon = data.get('longitude')
 
@@ -1048,7 +1052,7 @@ def verify_attendance():
         return jsonify({'success': False, 'message': 'Keep your eyes open for the first capture.'}), 400
     if blink_ear > EAR_CLOSED_THRESHOLD:
         return jsonify({'success': False, 'message': 'Blink not detected. Please blink when prompted.'}), 400
-    # eyes were open, then closed -> live person confirmed
+    # eyes were open, then closed → live person confirmed
 
     # ---- FACE MATCH on the open-eyes frame ----
     locs = face_recognition.face_locations(open_rgb)
@@ -1066,7 +1070,6 @@ def verify_attendance():
 
     known = np.frombuffer(student.face_encoding, dtype=np.float64)
     d = face_recognition.face_distance([known], encs[0])[0]
-
     if d >= 0.45:
         return jsonify({'success': False, 'message': 'Face verification failed.'}), 400
 
